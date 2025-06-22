@@ -101,7 +101,8 @@ oboe::Result OboePlayer::openStream()
     oboe::AudioStreamBuilder builder;
     auto result = builder.setSharingMode(sharing_mode)
                       ->setPerformanceMode(oboe::PerformanceMode::None)
-                      ->setChannelCount(stream_->getFormat().channels())
+                      //->setChannelCount(stream_->getFormat().channels()) CAPULLO
+					  ->setChannelCount(settings_.channel_count)
                       ->setSampleRate(stream_->getFormat().rate())
                       ->setFormat(audio_format)
                       ->setDataCallback(this)
@@ -169,7 +170,8 @@ oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStrea
 {
     if (latency_tuner_)
         latency_tuner_->tune();
-
+	// CAPULLO LOG
+	LOG(DEBUG, LOG_TAG) << "Playing in " << settings_.channel << " mode (" << settings_.channel_count << " channel(s))\n";
     double output_latency = getCurrentOutputLatencyMillis();
     // LOG(INFO, LOG_TAG) << "getCurrentOutputLatencyMillis: " << output_latency << ", frames: " << numFrames << "\n";
     chronos::usec delay(static_cast<int>(output_latency * 1000.));
@@ -192,17 +194,55 @@ oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStrea
     {
         // LOG(INFO, LOG_TAG) << "Failed to get chunk. Playing silence.\n";
     }
-    else
-    {
-        adjustVolume(static_cast<char*>(buffer), numFrames);
-        if (stream_->getFormat().bits() == 24)
-        {
+    else {
+        adjustVolume(static_cast<char *>(buffer), numFrames);
+        // CAPULLO BALANCE
+        if (settings_.channel_count == 2 && settings_.channel != "stereo") {
+            int bits = stream_->getFormat().bits();
+            int channels = stream_->getFormat().channels();
+
+            if (bits == 16) {
+                int16_t *samples = static_cast<int16_t *>(buffer);
+                for (int i = 0; i < numFrames; ++i) {
+                    if (settings_.channel == "left")
+                        samples[i * channels + 1] = 0;  // zero right
+                    else if (settings_.channel == "right")
+                        samples[i * channels] = 0;      // zero left
+                }
+            } else if (bits == 32) {
+                int32_t *samples = static_cast<int32_t *>(buffer);
+                for (int i = 0; i < numFrames; ++i) {
+                    if (settings_.channel == "left")
+                        samples[i * channels + 1] = 0;
+                    else if (settings_.channel == "right")
+                        samples[i * channels] = 0;
+                }
+            }
+        }
+        // To support 24-bit — it's more complex due to packing
+        if (stream_->getFormat().bits() == 24) {
             // Copy the 24 bit, 4 bytes data into Oboes 24 bit, 3 bytes buffer
-            for (size_t n = 0; n < static_cast<size_t>(numFrames) * stream_->getFormat().channels(); ++n)
-                memcpy(static_cast<char*>(audioData) + 3 * n, audio_data_.data() + 4 * n, 3);
+            //    for (size_t n = 0; n < static_cast<size_t>(numFrames) * stream_->getFormat().channels(); ++n)
+            //        memcpy(static_cast<char*>(audioData) + 3 * n, audio_data_.data() + 4 * n, 3);
+            int channels = stream_->getFormat().channels();
+            for (int i = 0; i < numFrames; ++i) {
+                for (int ch = 0; ch < channels; ++ch) {
+                    bool mute = (settings_.channel == "left" && ch == 1) ||
+                                (settings_.channel == "right" && ch == 0);
+                    const char *src = audio_data_.data() + 4 * (i * channels + ch);
+                    char *dst = static_cast<char *>(audioData) + 3 * (i * channels + ch);
+                    if (mute) {
+                        dst[0] = 0;
+                        dst[1] = 0;
+                    } else {
+                        dst[0] = src[0];
+                        dst[1] = src[1];
+                        dst[2] = src[2];  // skip the fourth byte
+                    }
+                }
+            }
         }
     }
-
     return oboe::DataCallbackResult::Continue;
 }
 

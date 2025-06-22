@@ -106,6 +106,10 @@ struct ClientSettings
         SharingMode sharing_mode{SharingMode::unspecified};
         /// Mixer settings
         Mixer mixer;
+		/// Output channel mode: "left", "right", or "stereo" CAPULLO
+		std::string channel{"stereo"};
+		/// Number of output channels: 1 for mono, 2 for stereo (derived from `channel`) CAPULLO
+		int channel_count{2};
     };
 
     /// Log settings
