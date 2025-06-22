@@ -118,7 +118,11 @@ else()
 endif()
 
 # list(APPEND SERVER_LIBRARIES Boost::boost)
-list(APPEND SERVER_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
+if (ANDROID)
+  target_link_libraries(common openssl::crypto openssl::ssl)
+else ()
+  target_link_libraries(common OpenSSL::Crypto OpenSSL::SSL)
+endif ()
 
 if(ANDROID)
   add_executable(libsnapserver.so ${SERVER_SOURCES})

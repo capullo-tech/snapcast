@@ -5,7 +5,7 @@ if(NOT WIN32 AND NOT ANDROID)
   list(APPEND SOURCES daemon.cpp)
 endif()
 
-include_directories(${OPENSSL_INCLUDE_DIR})
+#include_directories(${OPENSSL_INCLUDE_DIR})
 
 if(SOXR_FOUND)
   include_directories(${SOXR_INCLUDE_DIRS})
@@ -19,4 +19,8 @@ elseif(SOXR_FOUND)
   target_link_libraries(common ${SOXR_LIBRARIES})
 endif()
 
-target_link_libraries(common OpenSSL::Crypto OpenSSL::SSL)
+if (ANDROID)
+  target_link_libraries(common openssl::crypto openssl::ssl)
+else ()
+  target_link_libraries(common OpenSSL::Crypto OpenSSL::SSL)
+endif ()
