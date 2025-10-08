@@ -204,41 +204,41 @@ oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStrea
             if (bits == 16) {
                 int16_t *samples = static_cast<int16_t *>(buffer);
                 for (int i = 0; i < numFrames; ++i) {
-                    if (settings_.channel == "left")
-                        samples[i * channels + 1] = 0;  // zero right
-                    else if (settings_.channel == "right")
-                        samples[i * channels] = 0;      // zero left
+                    int16_t source = (settings_.channel == "left")
+                                     ? samples[i * channels]           // left
+                                     : samples[i * channels + 1];      // right
+
+                    samples[i * channels]     = source;  // left
+                    samples[i * channels + 1] = source;  // right
                 }
             } else if (bits == 32) {
                 int32_t *samples = static_cast<int32_t *>(buffer);
                 for (int i = 0; i < numFrames; ++i) {
-                    if (settings_.channel == "left")
-                        samples[i * channels + 1] = 0;
-                    else if (settings_.channel == "right")
-                        samples[i * channels] = 0;
+                    int32_t source = (settings_.channel == "left")
+                                     ? samples[i * channels]
+                                     : samples[i * channels + 1];
+
+                    samples[i * channels]     = source;
+                    samples[i * channels + 1] = source;
                 }
             }
         }
         // To support 24-bit — it's more complex due to packing
         if (stream_->getFormat().bits() == 24) {
             // Copy the 24 bit, 4 bytes data into Oboes 24 bit, 3 bytes buffer
-            //    for (size_t n = 0; n < static_cast<size_t>(numFrames) * stream_->getFormat().channels(); ++n)
-            //        memcpy(static_cast<char*>(audioData) + 3 * n, audio_data_.data() + 4 * n, 3);
             int channels = stream_->getFormat().channels();
+
             for (int i = 0; i < numFrames; ++i) {
+                // Choose the source sample (3 bytes from 4-byte buffer)
+                int src_ch = (settings_.channel == "left") ? 0 : 1;
+
+                const char *src = audio_data_.data() + 4 * (i * channels + src_ch);
+
                 for (int ch = 0; ch < channels; ++ch) {
-                    bool mute = (settings_.channel == "left" && ch == 1) ||
-                                (settings_.channel == "right" && ch == 0);
-                    const char *src = audio_data_.data() + 4 * (i * channels + ch);
                     char *dst = static_cast<char *>(audioData) + 3 * (i * channels + ch);
-                    if (mute) {
-                        dst[0] = 0;
-                        dst[1] = 0;
-                    } else {
-                        dst[0] = src[0];
-                        dst[1] = src[1];
-                        dst[2] = src[2];  // skip the fourth byte
-                    }
+                    dst[0] = src[0];
+                    dst[1] = src[1];
+                    dst[2] = src[2];
                 }
             }
         }
