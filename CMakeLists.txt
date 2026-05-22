@@ -98,9 +98,9 @@ else()
 endif()
 
 include(GNUInstallDirs)
-include(${CMAKE_SOURCE_DIR}/cmake/clang-tidy.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/cppcheck.cmake)
-include(${CMAKE_SOURCE_DIR}/cmake/reformat.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/clang-tidy.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/cppcheck.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/reformat.cmake)
 
 if(NOT WIN32)
   option(BUILD_SERVER "Build Snapserver" ON) # no Windows server for now
@@ -152,21 +152,21 @@ if(NOT DEFINED CMAKE_INSTALL_INCLUDEDIR)
       CACHE PATH "Output directory for header files")
 endif()
 
-set(INCLUDE_DIRS "${CMAKE_SOURCE_DIR}" "${CMAKE_INSTALL_INCLUDEDIR}")
+set(INCLUDE_DIRS "${PROJECT_SOURCE_DIR}" "${CMAKE_INSTALL_INCLUDEDIR}")
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
 add_compile_definitions(VERSION="${PROJECT_VERSION}")
 
 if(NOT ANDROID)
-  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+  set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 endif()
 
 # Configure compiler options
 set(CMAKE_CXX_STANDARD 17)
 
-include(${CMAKE_SOURCE_DIR}/cmake/TargetArch.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/TargetArch.cmake)
 target_architecture(HOST_ARCH)
 
 # message(STATUS "System name:  ${CMAKE_SYSTEM_NAME}")
@@ -198,7 +198,7 @@ include(CMakePushCheckState)
 include(CheckIncludeFileCXX)
 include_directories(${INCLUDE_DIRS})
 
-include(${CMAKE_SOURCE_DIR}/cmake/CheckCXX11StringSupport.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/CheckCXX11StringSupport.cmake)
 
 check_cxx11_string_support(HAS_CXX11_STRING_SUPPORT)
 if(NOT HAS_CXX11_STRING_SUPPORT)

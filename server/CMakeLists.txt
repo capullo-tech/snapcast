@@ -33,7 +33,7 @@ set(SERVER_SOURCES
 
 set(SERVER_LIBRARIES ${CMAKE_THREAD_LIBS_INIT} ${ATOMIC_LIBRARY} common)
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/server)
+include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/server)
 
 include_directories(SYSTEM ${Boost_INCLUDE_DIR})
 

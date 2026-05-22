@@ -3,7 +3,7 @@ if(CLANG_FORMAT)
   file(GLOB_RECURSE CHECK_CXX_SOURCE_FILES common/*.[ch]pp client/*.[ch]pp
        server/*.[ch]pp)
 
-  list(REMOVE_ITEM CHECK_CXX_SOURCE_FILES "${CMAKE_SOURCE_DIR}/common/json.hpp")
+  list(REMOVE_ITEM CHECK_CXX_SOURCE_FILES "${PROJECT_SOURCE_DIR}/common/json.hpp")
 
   add_custom_target(
     reformat-c++
