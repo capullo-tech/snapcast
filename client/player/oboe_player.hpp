@@ -26,6 +26,8 @@
 #include <oboe/Oboe.h>
 
 // standard headers
+#include <atomic>
+#include <thread>
 #include <vector>
 
 
@@ -72,6 +74,13 @@ protected:
 
     /// Audio data buffer used for chaning the bit depth
     std::vector<char> audio_data_;
+
+    // CAPULLO: runtime channel control via abstract Unix socket "snapclient_channel"
+    // 0 = stereo, 1 = left, 2 = right
+    std::atomic<int> channel_mode_{0};
+    std::atomic<bool> ctrl_running_{false};
+    std::thread ctrl_thread_;
+    void startChannelControl();
 };
 
 } // namespace player

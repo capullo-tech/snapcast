@@ -28,6 +28,10 @@
 // standard headers
 #include <cstring>
 #include <iostream>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/select.h>
+#include <unistd.h>
 
 
 using namespace std;
@@ -44,6 +48,15 @@ OboePlayer::OboePlayer(boost::asio::io_context& io_context, const ClientSettings
 {
     LOG(DEBUG, LOG_TAG) << "Contructor\n";
     LOG(INFO, LOG_TAG) << "Init start\n";
+
+    // CAPULLO: initialise channel_mode_ from startup --channel arg
+    if (settings_.channel == "left")       channel_mode_ = 1;
+    else if (settings_.channel == "right") channel_mode_ = 2;
+    else                                   channel_mode_ = 0; // stereo
+    LOG(INFO, LOG_TAG) << "Initial channel mode: " << settings_.channel << " (" << channel_mode_.load() << ")\n";
+
+    startChannelControl();
+
     char* env = getenv("SAMPLE_RATE");
     if (env)
         oboe::DefaultStreamValues::SampleRate = cpt::stoi(env, oboe::DefaultStreamValues::SampleRate);
@@ -66,6 +79,9 @@ OboePlayer::OboePlayer(boost::asio::io_context& io_context, const ClientSettings
 OboePlayer::~OboePlayer()
 {
     LOG(DEBUG, LOG_TAG) << "Destructor\n";
+    ctrl_running_ = false;
+    if (ctrl_thread_.joinable())
+        ctrl_thread_.join();
     stop();
     auto result = out_stream_->stop(std::chrono::nanoseconds(100ms).count());
     if (result != oboe::Result::OK)
@@ -166,12 +182,69 @@ double OboePlayer::getCurrentOutputLatencyMillis() const
 }
 
 
+void OboePlayer::startChannelControl()
+{
+    ctrl_running_ = true;
+    ctrl_thread_ = std::thread([this]() {
+        int server_fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (server_fd < 0) {
+            LOG(ERROR, LOG_TAG) << "Channel control socket failed\n";
+            return;
+        }
+
+        struct sockaddr_un addr{};
+        addr.sun_family = AF_UNIX;
+        addr.sun_path[0] = '\0'; // abstract socket
+        const char* name = "snapclient_channel";
+        ::strncpy(addr.sun_path + 1, name, sizeof(addr.sun_path) - 2);
+        socklen_t addrlen = static_cast<socklen_t>(offsetof(struct sockaddr_un, sun_path) + 1 + ::strlen(name));
+
+        if (::bind(server_fd, reinterpret_cast<struct sockaddr*>(&addr), addrlen) < 0) {
+            LOG(ERROR, LOG_TAG) << "Channel control bind failed (another instance running?)\n";
+            ::close(server_fd);
+            return;
+        }
+        ::listen(server_fd, 2);
+        LOG(INFO, LOG_TAG) << "Channel control listening on @snapclient_channel\n";
+
+        while (ctrl_running_) {
+            fd_set fds;
+            FD_ZERO(&fds);
+            FD_SET(server_fd, &fds);
+            struct timeval tv{0, 200000}; // 200ms poll interval
+            if (::select(server_fd + 1, &fds, nullptr, nullptr, &tv) <= 0)
+                continue;
+
+            int client_fd = ::accept(server_fd, nullptr, nullptr);
+            if (client_fd < 0) break;
+
+            char buf[32]{};
+            ssize_t n = ::recv(client_fd, buf, sizeof(buf) - 1, 0);
+            ::close(client_fd);
+
+            if (n > 0) {
+                std::string cmd(buf, static_cast<size_t>(n));
+                // trim trailing whitespace/newline
+                while (!cmd.empty() && (cmd.back() == '\n' || cmd.back() == '\r' || cmd.back() == ' '))
+                    cmd.pop_back();
+
+                int prev = channel_mode_.load();
+                if (cmd == "left")        channel_mode_ = 1;
+                else if (cmd == "right")  channel_mode_ = 2;
+                else                      channel_mode_ = 0; // stereo
+                LOG(INFO, LOG_TAG) << "Channel: " << prev << " → " << channel_mode_.load() << " (" << cmd << ")\n";
+            }
+        }
+        ::close(server_fd);
+        LOG(INFO, LOG_TAG) << "Channel control thread stopped\n";
+    });
+}
+
+
 oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStream*/, void* audioData, int32_t numFrames)
 {
     if (latency_tuner_)
         latency_tuner_->tune();
-	// CAPULLO LOG
-	LOG(DEBUG, LOG_TAG) << "Playing in " << settings_.channel << " mode (" << settings_.channel_count << " channel(s))\n";
     double output_latency = getCurrentOutputLatencyMillis();
     // LOG(INFO, LOG_TAG) << "getCurrentOutputLatencyMillis: " << output_latency << ", frames: " << numFrames << "\n";
     chronos::usec delay(static_cast<int>(output_latency * 1000.));
@@ -196,28 +269,27 @@ oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStrea
     }
     else {
         adjustVolume(static_cast<char *>(buffer), numFrames);
-        // CAPULLO BALANCE
-        if (settings_.channel_count == 2 && settings_.channel != "stereo") {
+        // CAPULLO BALANCE — runtime channel mode via atomic (0=stereo, 1=left, 2=right)
+        int mode = channel_mode_.load(std::memory_order_relaxed);
+        if (settings_.channel_count == 2 && mode != 0) {
             int bits = stream_->getFormat().bits();
             int channels = stream_->getFormat().channels();
 
             if (bits == 16) {
                 int16_t *samples = static_cast<int16_t *>(buffer);
                 for (int i = 0; i < numFrames; ++i) {
-                    int16_t source = (settings_.channel == "left")
+                    int16_t source = (mode == 1)
                                      ? samples[i * channels]           // left
                                      : samples[i * channels + 1];      // right
-
-                    samples[i * channels]     = source;  // left
-                    samples[i * channels + 1] = source;  // right
+                    samples[i * channels]     = source;
+                    samples[i * channels + 1] = source;
                 }
             } else if (bits == 32) {
                 int32_t *samples = static_cast<int32_t *>(buffer);
                 for (int i = 0; i < numFrames; ++i) {
-                    int32_t source = (settings_.channel == "left")
+                    int32_t source = (mode == 1)
                                      ? samples[i * channels]
                                      : samples[i * channels + 1];
-
                     samples[i * channels]     = source;
                     samples[i * channels + 1] = source;
                 }
@@ -225,20 +297,14 @@ oboe::DataCallbackResult OboePlayer::onAudioReady(oboe::AudioStream* /*oboeStrea
         }
         // To support 24-bit — it's more complex due to packing
         if (stream_->getFormat().bits() == 24) {
-            // Copy the 24 bit, 4 bytes data into Oboes 24 bit, 3 bytes buffer
             int channels = stream_->getFormat().channels();
-
+            int mode24 = channel_mode_.load(std::memory_order_relaxed);
             for (int i = 0; i < numFrames; ++i) {
-                // Choose the source sample (3 bytes from 4-byte buffer)
-                int src_ch = (settings_.channel == "left") ? 0 : 1;
-
+                int src_ch = (mode24 == 2) ? 1 : 0; // right=1, left/stereo=0
                 const char *src = audio_data_.data() + 4 * (i * channels + src_ch);
-
                 for (int ch = 0; ch < channels; ++ch) {
                     char *dst = static_cast<char *>(audioData) + 3 * (i * channels + ch);
-                    dst[0] = src[0];
-                    dst[1] = src[1];
-                    dst[2] = src[2];
+                    dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2];
                 }
             }
         }
