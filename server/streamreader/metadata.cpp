@@ -122,6 +122,8 @@ json Metadata::toJson() const
     addTag(j, "userRating", user_rating);
     addTag(j, "spotifyArtistId", spotify_artist_id);
     addTag(j, "spotifyTrackId", spotify_track_id);
+    for (const auto& element : extra.items())
+        j[element.key()] = element.value();
     return j;
 }
 
@@ -170,10 +172,11 @@ void Metadata::fromJson(const json& j)
                                                    "userRating",
                                                    "spotifyArtistId",
                                                    "spotifyTrackId"};
+    extra = json::object();
     for (const auto& element : j.items())
     {
         if (supported_tags.find(element.key()) == supported_tags.end())
-            LOG(WARNING, LOG_TAG) << "Tag not supoorted: " << element.key() << "\n";
+            extra[element.key()] = element.value();
     }
 
     readTag(j, "trackId", track_id);

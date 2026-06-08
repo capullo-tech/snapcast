@@ -150,6 +150,9 @@ public:
     /// Spotify track id
     std::optional<std::string> spotify_track_id;
 
+    /// Passthrough storage for unknown/custom tags not in the MPRIS spec
+    json extra;
+
     /// serialize to json
     json toJson() const;
     /// deserialize from json
