@@ -16,15 +16,15 @@ endif()
 # Make test executable
 set(TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp
-    ${CMAKE_SOURCE_DIR}/common/stream_uri.cpp
-    ${CMAKE_SOURCE_DIR}/common/base64.cpp
-    ${CMAKE_SOURCE_DIR}/common/utils/string_utils.cpp
-    ${CMAKE_SOURCE_DIR}/common/utils/file_utils.cpp
-    ${CMAKE_SOURCE_DIR}/server/authinfo.cpp
+    ${PROJECT_SOURCE_DIR}/common/stream_uri.cpp
+    ${PROJECT_SOURCE_DIR}/common/base64.cpp
+    ${PROJECT_SOURCE_DIR}/common/utils/string_utils.cpp
+    ${PROJECT_SOURCE_DIR}/common/utils/file_utils.cpp
+    ${PROJECT_SOURCE_DIR}/server/authinfo.cpp
     # ${CMAKE_SOURCE_DIR}/server/jwt.cpp
-    ${CMAKE_SOURCE_DIR}/server/streamreader/control_error.cpp
-    ${CMAKE_SOURCE_DIR}/server/streamreader/properties.cpp
-    ${CMAKE_SOURCE_DIR}/server/streamreader/metadata.cpp)
+    ${PROJECT_SOURCE_DIR}/server/streamreader/control_error.cpp
+    ${PROJECT_SOURCE_DIR}/server/streamreader/properties.cpp
+    ${PROJECT_SOURCE_DIR}/server/streamreader/metadata.cpp)
 
 find_package(OpenSSL REQUIRED)
 

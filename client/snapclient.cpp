@@ -221,6 +221,15 @@ int main(int argc, char** argv)
 #endif
         mixer_mode = op.add<Value<string>>("", "mixer", mixers + "|none|?[:<options>]", "software");
 
+// channel settings CAPULLO
+#if defined(HAS_OBOE)
+		auto channel_mode = op.add<Value<string>>("", "channel", "Channel mode: stereo|left|right", "stereo", &settings.player.channel);
+		// Validate channel mode
+		if (settings.player.channel != "left" && settings.player.channel != "right" && settings.player.channel != "stereo") {
+            std::cerr << "Invalid channel mode: " << settings.player.channel << std::endl;
+            exit(1);
+        }
+#endif
 // daemon settings
 #ifdef HAS_DAEMON
         int processPriority(-3);

@@ -33,7 +33,7 @@ set(SERVER_SOURCES
 
 set(SERVER_LIBRARIES ${CMAKE_THREAD_LIBS_INIT} ${ATOMIC_LIBRARY} common)
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/server)
+include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/server)
 
 include_directories(SYSTEM ${Boost_INCLUDE_DIR})
 
@@ -140,6 +140,7 @@ endif()
 if(ANDROID)
   add_executable(libsnapserver.so ${SERVER_SOURCES})
   target_link_libraries(libsnapserver.so ${SERVER_LIBRARIES} log)
+  target_link_options(libsnapserver.so PRIVATE "-Wl,-z,max-page-size=16384")
 else()
   add_executable(snapserver ${SERVER_SOURCES})
   target_link_libraries(snapserver ${SERVER_LIBRARIES})

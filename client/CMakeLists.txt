@@ -11,7 +11,7 @@ set(CLIENT_SOURCES
 
 set(CLIENT_LIBRARIES ${CMAKE_THREAD_LIBS_INIT} ${ATOMIC_LIBRARY} common)
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/client)
+include_directories(${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/client)
 
 include_directories(SYSTEM ${Boost_INCLUDE_DIR})
 
@@ -139,6 +139,7 @@ endif()
 if(ANDROID)
   add_executable(libsnapclient.so ${CLIENT_SOURCES})
   target_link_libraries(libsnapclient.so ${CLIENT_LIBRARIES} log OpenSLES)
+  target_link_options(libsnapclient.so PRIVATE "-Wl,-z,max-page-size=16384")
 else()
   add_executable(snapclient ${CLIENT_SOURCES})
   target_link_libraries(snapclient ${CLIENT_LIBRARIES})
