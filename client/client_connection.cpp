@@ -154,6 +154,10 @@ void ClientConnection::connect(const ResultHandler& handler)
             // We were successful or interrupted, e.g. by sig int
             break;
         }
+        // A failed attempt leaves the socket open with that endpoint's address family (and, for wss, a used ssl stream),
+        // so connecting the next endpoint on it fails, e.g. IPv6 => IPv4 with "Invalid argument". Start over on a fresh one.
+        LOG(INFO, LOG_TAG) << "Connect to " << iter.endpoint() << " failed: " << ec.message() << "\n";
+        disconnect();
     }
 
     if (ec)
