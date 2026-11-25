@@ -62,7 +62,8 @@ void StreamSessionTcp::stop()
     {
         boost::system::error_code ec;
         socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-        if (ec)
+        // not_connected: the client already went away. Nothing went wrong, so it is not an error.
+        if (ec && ec != boost::asio::error::not_connected)
             LOG(ERROR, LOG_TAG) << "Error in socket shutdown: " << ec.message() << "\n";
         socket_.close(ec);
         if (ec)

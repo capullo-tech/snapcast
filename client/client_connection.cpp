@@ -324,7 +324,9 @@ void ClientConnectionTcp::disconnect()
     }
     boost::system::error_code ec;
     socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-    if (ec)
+    // not_connected: the peer or a failed connect already ended the connection (a join falling back
+    // to its next address does this every time). Nothing went wrong, so it is not an error.
+    if (ec && ec != boost::asio::error::not_connected)
         LOG(ERROR, LOG_TAG) << "Error in socket shutdown: " << ec.message() << "\n";
     socket_.close(ec);
     if (ec)
