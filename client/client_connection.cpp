@@ -48,6 +48,13 @@ static constexpr auto LOG_TAG = "Connection";
 
 static constexpr const char* WS_CLIENT_NAME = "Snapcast";
 
+/// The Host header for the websocket handshake: an IPv6 literal goes in brackets (RFC 7230)
+static std::string hostHeader(const StreamUri& uri)
+{
+    const std::string host = (uri.host.find(':') != std::string::npos) ? "[" + uri.host + "]" : uri.host;
+    return host + ":" + std::to_string(uri.port.value_or(0));
+}
+
 
 PendingRequest::PendingRequest(const boost::asio::strand<boost::asio::any_io_executor>& strand, uint16_t reqId, const MessageHandler<msg::BaseMessage>& handler)
     : id_(reqId), timer_(strand), strand_(strand), handler_(handler)
@@ -544,7 +551,7 @@ boost::system::error_code ClientConnectionWs::doConnect(boost::asio::ip::basic_e
     getWs().set_option(websocket::stream_base::decorator([](websocket::request_type& req) { req.set(http::field::user_agent, WS_CLIENT_NAME); }));
 
     // Perform the websocket handshake
-    getWs().handshake(server_.uri.host + ":" + std::to_string(server_.uri.port.value_or(0)), "/stream", ec);
+    getWs().handshake(hostHeader(server_.uri), "/stream", ec);
     return ec;
 }
 
@@ -716,7 +723,7 @@ boost::system::error_code ClientConnectionWss::doConnect(boost::asio::ip::basic_
     getWs().set_option(websocket::stream_base::decorator([](websocket::request_type& req) { req.set(http::field::user_agent, WS_CLIENT_NAME); }));
 
     // Perform the websocket handshake
-    getWs().handshake(server_.uri.host + ":" + std::to_string(server_.uri.port.value_or(0)), "/stream", ec);
+    getWs().handshake(hostHeader(server_.uri), "/stream", ec);
 
     return ec;
 }
