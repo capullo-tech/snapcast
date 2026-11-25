@@ -279,6 +279,18 @@ TEST_CASE("Uri")
     REQUIRE(uri.password.empty());
     REQUIRE(uri.port == 1788);
 
+    // An IPv6 literal: bracketed in the URI, bare in host, bracketed again by toString
+    uri = StreamUri("tcp://[fd7a:115c:a1e0::1]:1704");
+    REQUIRE(uri.scheme == "tcp");
+    REQUIRE(uri.host == "fd7a:115c:a1e0::1");
+    REQUIRE(uri.port == 1704);
+    REQUIRE(uri.toString() == "tcp://[fd7a:115c:a1e0::1]:1704");
+
+    uri = StreamUri("wss://[::1]/stream");
+    REQUIRE(uri.host == "::1");
+    REQUIRE(!uri.port.has_value());
+    REQUIRE(uri.path == "/stream");
+
     // uri = StreamUri("scheme:[//host[:port]][/]path[?query=none][#fragment]");
     // Test with all fields
     uri = StreamUri("scheme://host:42/path?query=none&key=value#fragment");

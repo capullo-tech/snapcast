@@ -97,7 +97,19 @@ void StreamUri::parse(const std::string& stream_uri)
 
     host = strutils::uriDecode(strutils::trim_copy(tmp.substr(0, pos)));
     std::string str_port;
-    host = utils::string::split_left(host, ':', str_port);
+    // An IPv6 literal is bracketed ("[fd7a:115c::1]:1704", RFC 3986): its colons are not the port
+    // separator. The brackets are dropped, so host is the bare address the resolver takes.
+    size_t close = (!host.empty() && host[0] == '[') ? host.find(']') : string::npos;
+    if (close != string::npos)
+    {
+        if ((close + 1 < host.length()) && (host[close + 1] == ':'))
+            str_port = host.substr(close + 2);
+        host = host.substr(1, close - 1);
+    }
+    else
+    {
+        host = utils::string::split_left(host, ':', str_port);
+    }
     port = std::strtol(str_port.c_str(), nullptr, 10);
     if (port == 0)
         port = std::nullopt;
@@ -145,7 +157,7 @@ std::string StreamUri::toString() const
 {
     // scheme:[//[user:password@]host[:port]][/]path[?query][#fragment]
     stringstream ss;
-    ss << scheme << "://" << host;
+    ss << scheme << "://" << (host.find(':') != string::npos ? "[" + host + "]" : host);
     if (port.has_value())
         ss << ":" << port.value();
 
@@ -172,7 +184,7 @@ std::string StreamUri::toString() const
 
 json StreamUri::toJson() const
 {
-    std::string host_port = host;
+    std::string host_port = host.find(':') != string::npos ? "[" + host + "]" : host;
     if (port.has_value())
         host_port += ":" + std::to_string(port.value());
 
