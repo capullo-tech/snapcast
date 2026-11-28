@@ -604,7 +604,7 @@ public:
     }
 
 protected:
-    Log() noexcept : last_buffer_(nullptr), do_log_(true)
+    Log() noexcept
     {
         std::clog.rdbuf(this);
         std::clog << Severity() << Tag() << Function() << Conditional() << AixLog::Color::NONE << std::flush;
@@ -618,18 +618,19 @@ protected:
     int sync() override
     {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
-        if (!get_stream().str().empty())
+        ThreadState& state = get_state();
+        if (!state.stream.str().empty())
         {
-            if (do_log_)
+            if (state.do_log)
             {
                 for (const auto& sink : log_sinks_)
                 {
-                    if (sink->filter.match(metadata_))
-                        sink->log(metadata_, get_stream().str());
+                    if (sink->filter.match(state.metadata))
+                        sink->log(state.metadata, state.stream.str());
                 }
             }
-            get_stream().str("");
-            get_stream().clear();
+            state.stream.str("");
+            state.stream.clear();
         }
 
         return 0;
@@ -642,8 +643,8 @@ protected:
         {
             if (c == '\n')
                 sync();
-            else if (do_log_)
-                get_stream() << static_cast<char>(c);
+            else if (get_state().do_log)
+                get_state().stream << static_cast<char>(c);
         }
         else
         {
@@ -659,25 +660,35 @@ private:
     friend std::ostream& operator<<(std::ostream& os, const Function& function);
     friend std::ostream& operator<<(std::ostream& os, const Conditional& conditional);
 
-    std::stringstream& get_stream()
+    /// Everything a log statement accumulates before its line is flushed. Kept per thread: with a
+    /// single shared Metadata/condition, one thread's statement could change the severity, tag or
+    /// condition another thread's half-written line is later filtered and formatted with, so lines
+    /// got dropped (e.g. an INFO line filtered as DEBUG) or attributed to the wrong tag.
+    struct ThreadState
+    {
+        std::stringstream stream;
+        Metadata metadata;
+        bool do_log = true;
+    };
+
+    /// Must be called with mutex_ held.
+    ThreadState& get_state()
     {
         auto id = std::this_thread::get_id();
-        if ((last_buffer_ == nullptr) || (last_id_ != id))
+        if ((last_state_ == nullptr) || (last_id_ != id))
         {
             last_id_ = id;
-            last_buffer_ = &(buffer_[id]);
+            last_state_ = &(state_[id]);
         }
-        return *last_buffer_;
+        return *last_state_;
     }
 
-    /// one buffer per thread to avoid mixed log lines
-    std::map<std::thread::id, std::stringstream> buffer_;
+    /// one state (buffer + metadata) per thread to avoid mixed log lines
+    std::map<std::thread::id, ThreadState> state_;
     /// the last thread id
     std::thread::id last_id_;
-    /// the last buffer
-    std::stringstream* last_buffer_ = nullptr;
-    Metadata metadata_;
-    bool do_log_;
+    /// the last thread's state
+    ThreadState* last_state_ = nullptr;
     std::vector<log_sink_ptr> log_sinks_;
     std::recursive_mutex mutex_;
 };
@@ -1142,15 +1153,17 @@ static std::ostream& operator<<(std::ostream& os, const Severity& log_severity)
     if (log != nullptr)
     {
         std::lock_guard<std::recursive_mutex> lock(log->mutex_);
-        if (log->metadata_.severity != log_severity)
+        Log::ThreadState& state = log->get_state();
+        if (state.metadata.severity != log_severity)
         {
             log->sync();
-            log->metadata_.severity = log_severity;
-            log->metadata_.timestamp = nullptr;
-            log->metadata_.tag = nullptr;
-            log->metadata_.function = nullptr;
-            log->do_log_ = true;
+            state.metadata.severity = log_severity;
+            state.metadata.timestamp = nullptr;
+            state.metadata.tag = nullptr;
+            state.metadata.function = nullptr;
         }
+        // Severity starts every LOG statement; a Conditional only applies to its own statement.
+        state.do_log = true;
     }
     else
     {
@@ -1165,7 +1178,7 @@ static std::ostream& operator<<(std::ostream& os, const Timestamp& timestamp)
     if (log != nullptr)
     {
         std::lock_guard<std::recursive_mutex> lock(log->mutex_);
-        log->metadata_.timestamp = timestamp;
+        log->get_state().metadata.timestamp = timestamp;
     }
     else if (timestamp)
     {
@@ -1180,7 +1193,7 @@ static std::ostream& operator<<(std::ostream& os, const Tag& tag)
     if (log != nullptr)
     {
         std::lock_guard<std::recursive_mutex> lock(log->mutex_);
-        log->metadata_.tag = tag;
+        log->get_state().metadata.tag = tag;
     }
     else if (tag)
     {
@@ -1195,7 +1208,7 @@ static std::ostream& operator<<(std::ostream& os, const Function& function)
     if (log != nullptr)
     {
         std::lock_guard<std::recursive_mutex> lock(log->mutex_);
-        log->metadata_.function = function;
+        log->get_state().metadata.function = function;
     }
     else if (function)
     {
@@ -1210,7 +1223,7 @@ static std::ostream& operator<<(std::ostream& os, const Conditional& conditional
     if (log != nullptr)
     {
         std::lock_guard<std::recursive_mutex> lock(log->mutex_);
-        log->do_log_ = conditional.is_true();
+        log->get_state().do_log = conditional.is_true();
     }
     return os;
 }
